@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::collections::{HashMap, VecDeque};
 use std::env;
 
 use openai_api::api::{CompletionArgs, CompletionArgsBuilder, Engine};
@@ -9,6 +9,7 @@ use serenity::model::channel::Message;
 use serenity::model::gateway::Ready;
 use serenity::model::id::UserId;
 use serenity::prelude::*;
+use textwrap_macros::dedent;
 
 #[group]
 struct General;
@@ -16,7 +17,7 @@ struct General;
 struct Handler {
     openai_client: openai_api::Client,
     args_builder: CompletionArgsBuilder,
-    chat_log: RwLock<HashMap<UserId, Vec<(String, String)>>>,
+    chat_log: RwLock<HashMap<UserId, VecDeque<(String, String)>>>,
 }
 
 impl Handler {
@@ -27,12 +28,12 @@ impl Handler {
         let mut builder = CompletionArgs::builder();
         builder
             .engine(Engine::Davinci)
-            .max_tokens(100) // toriaezu 200 ni siyouze  2000 osybaeri sugirukamo w
-            .temperature(0.9)
-            .top_p(0.3)
-            .stop(vec!["\n".into()])
-            .presence_penalty(-0.9)
-            .frequency_penalty(-0.5);
+            .max_tokens(100)
+            .temperature(0.0)
+            .top_p(1.0)
+            .stop(vec!["You:".into()])
+            .presence_penalty(0.6)
+            .frequency_penalty(0.7);
 
         Self {
             openai_client: client,
@@ -42,6 +43,14 @@ impl Handler {
     }
 }
 
+const DESCRIPTION: &'static str = dedent!("\
+    「くれちき」は、とても明るい人です。
+    嘘をつかず、面白い話をしてくれます。
+    これは、そんな「くれちき」と、人間の会話です。
+
+    -----
+");
+
 #[async_trait]
 impl EventHandler for Handler {
     async fn message(&self, ctx: Context, msg: Message) {
@@ -50,16 +59,16 @@ impl EventHandler for Handler {
         }
 
         let logs = {
-            let logs_lock = self.chat_log.read().await;
+            let lock = self.chat_log.read().await;
 
-            match logs_lock.get(&msg.author.id) {
+            match lock.get(&msg.author.id) {
                 Some(logs) => logs
                     .iter()
-                    .map(|(you, friend)| format!("You:{you}\nくれちき:{friend}\n"))
+                    .map(|(user_text, ai_text)| format!("{}: {}\nくれちき: {}\n", msg.author.name, user_text, ai_text))
                     .collect::<Box<[_]>>()
                     .join(""),
                 None => {
-                    drop(logs_lock);
+                    drop(lock);
                     self.chat_log
                         .write()
                         .await
@@ -71,10 +80,12 @@ impl EventHandler for Handler {
 
         let typing = msg.channel_id.start_typing(&ctx.http).unwrap();
 
+        let prompt = format!("{DESCRIPTION}{logs}You: {}\nくれちき: ", msg.content);
+        println!("{prompt}");
         let args = self
             .args_builder
             .clone()
-            .prompt(format!("{logs}You:{}\nくれちき:", msg.content))
+            .prompt(prompt)
             .build()
             .expect("failed to build completion args ::::((((:(");
 
@@ -89,13 +100,11 @@ impl EventHandler for Handler {
 
         {
             let mut logs = self.chat_log.write().await;
-            logs
-                .entry(msg.author.id)
-                .or_default()
-                .push((msg.content.clone(), completion.choices[0].text.clone()));
-            if logs.entry(msg.author.id).or_default().len() > 4 {
-                logs.entry(msg.author.id).or_default().remove(5);
-            }
+            let logs = logs.entry(msg.author.id).or_default();
+
+            logs.push_back((msg.content.clone(), completion.choices[0].text.clone()));
+            // logs.drain(..logs.len().saturating_sub(4));
+            println!("{:?}: {:#?}", msg.author, logs);
         }
 
         let _ = typing.stop();
