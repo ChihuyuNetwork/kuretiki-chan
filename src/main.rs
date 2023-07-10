@@ -80,7 +80,7 @@ impl EventHandler for Handler {
 
         let typing = msg.channel_id.start_typing(&ctx.http).unwrap();
 
-        let prompt = format!("{DESCRIPTION}{logs}You: {}\nくれちき: ", msg.content);
+        let prompt = format!("{logs}You: {}\nくれちき: ", msg.content);
         println!("{prompt}");
         let args = self
             .args_builder
