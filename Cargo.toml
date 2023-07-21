@@ -8,7 +8,7 @@ edition = "2021"
 [dependencies]
 dotenv = "0.15.0"
 openai-api = "0.1.4"
-serenity = "0.11.5"
+serenity = "0.11.6"
 string-join = "0.1.2"
 textwrap-macros = "0.3.0"
 tokio = { version = "1.29.1", features = ["full"] }
