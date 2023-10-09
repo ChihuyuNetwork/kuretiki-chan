@@ -11,4 +11,4 @@ openai-api = "0.1.4"
 serenity = "0.11.6"
 string-join = "0.1.2"
 textwrap-macros = "0.3.0"
-tokio = { version = "1.32.0", features = ["full"] }
+tokio = { version = "1.33.0", features = ["full"] }
