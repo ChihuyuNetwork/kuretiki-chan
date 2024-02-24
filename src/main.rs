@@ -54,7 +54,7 @@ const DESCRIPTION: &'static str = dedent!("\
 #[async_trait]
 impl EventHandler for Handler {
     async fn message(&self, ctx: Context, msg: Message) {
-        if msg.channel_id != 1121440749096009850 || msg.author.bot {
+        if msg.channel_id != 1210908167756578896 || msg.author.bot {
             return;
         }
 
