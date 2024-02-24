@@ -1,7 +1,9 @@
 use std::collections::{HashMap, VecDeque};
 use std::env;
 
-use openai_api::api::{CompletionArgs, CompletionArgsBuilder, Engine};
+use chatgpt::client::ChatGPT;
+use chatgpt::config::{ChatGPTEngine, ModelConfigurationBuilder};
+use chatgpt::types::CompletionResponse;
 use serenity::{async_trait, Client};
 use serenity::framework::standard::macros::group;
 use serenity::framework::StandardFramework;
@@ -15,37 +17,35 @@ use textwrap_macros::dedent;
 struct General;
 
 struct Handler {
-    openai_client: openai_api::Client,
-    args_builder: CompletionArgsBuilder,
+    chatgpt_client: ChatGPT,
     chat_log: RwLock<HashMap<UserId, VecDeque<(String, String)>>>,
 }
 
 impl Handler {
     pub fn new() -> Self {
         let api_token = env::var("OPENAI_SK").expect("token not found");
-        let client = openai_api::Client::new(&api_token);
-
-        let mut builder = CompletionArgs::builder();
-        builder
-            .engine(Engine::Davinci)
-            .max_tokens(100)
-            .temperature(0.0)
-            .top_p(1.0)
-            .stop(vec!["You:".into()])
-            .presence_penalty(0.6)
-            .frequency_penalty(0.7);
+        let client = ChatGPT::new_with_config(
+            api_token,
+            ModelConfigurationBuilder::default()
+                .engine(ChatGPTEngine::Gpt35Turbo_0301)
+                .max_tokens(2000)
+                .temperature(1.0)
+                .presence_penalty(0.6)
+                .frequency_penalty(0.7)
+                .build()
+                .unwrap()
+        ).unwrap();
 
         Self {
-            openai_client: client,
-            args_builder: builder,
+            chatgpt_client: client,
             chat_log: Default::default(),
         }
     }
 }
 
 const DESCRIPTION: &'static str = dedent!("\
-    「くれちき」は、とても明るい人です。
-    嘘をつかず、面白い話をしてくれます。
+    「くれちき」は、とても明るくてかわいい女の子です。
+    たまに奇想天外な返事をすることがありますが、嘘をつかず、面白い話をしてくれます。
     これは、そんな「くれちき」と、人間の会話です。
 
     -----
@@ -54,7 +54,7 @@ const DESCRIPTION: &'static str = dedent!("\
 #[async_trait]
 impl EventHandler for Handler {
     async fn message(&self, ctx: Context, msg: Message) {
-        if msg.channel_id != 1210908167756578896 || msg.author.bot {
+        if msg.channel_id != 1210917178455498792 || msg.author.bot || msg.content.starts_with("!") {
             return;
         }
 
@@ -73,28 +73,23 @@ impl EventHandler for Handler {
                         .write()
                         .await
                         .insert(msg.author.id, Default::default());
-                    "".into()
+                    DESCRIPTION.into()
                 }
             }
         };
 
-        let typing = msg.channel_id.start_typing(&ctx.http).unwrap();
+        let typing = msg.channel_id.start_typing(&ctx.http);
 
         let prompt = format!("{logs}You: {}\nくれちき: ", msg.content);
         println!("{prompt}");
-        let args = self
-            .args_builder
-            .clone()
-            .prompt(prompt)
-            .build()
-            .expect("failed to build completion args ::::((((:(");
 
-        let completion = self
-            .openai_client
-            .complete_prompt_sync(args)
-            .expect("copmpletion falied");
+        let response: CompletionResponse = self
+            .chatgpt_client
+            .send_message(prompt)
+            .await
+            .unwrap();
 
-        if let Err(why) = msg.reply(&ctx.http, &completion.choices[0].text).await {
+        if let Err(why) = msg.reply(&ctx.http, response.message().clone().content).await {
             println!("error sending message: {:?}", why);
         }
 
@@ -102,9 +97,9 @@ impl EventHandler for Handler {
             let mut logs = self.chat_log.write().await;
             let logs = logs.entry(msg.author.id).or_default();
 
-            logs.push_back((msg.content.clone(), completion.choices[0].text.clone()));
+            logs.push_back((msg.content.clone(), response.message().clone().content));
             // logs.drain(..logs.len().saturating_sub(4));
-            println!("{:?}: {:#?}", msg.author, logs);
+            println!("{:?}: {:#?}", msg.author.name, logs);
         }
 
         let _ = typing.stop();
@@ -120,7 +115,6 @@ async fn main() {
     dotenv::dotenv().ok();
 
     let framework = StandardFramework::new()
-        .configure(|c| c.prefix("~"))
         .group(&GENERAL_GROUP);
 
     //login with a bot token

@@ -6,9 +6,10 @@ edition = "2021"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
+chatgpt_rs = "1.2.3"
 dotenv = "0.15.0"
-openai-api = "0.1.4"
 serenity = "0.12.0"
 string-join = "0.1.2"
+textwrap = "0.16.1"
 textwrap-macros = "0.3.0"
 tokio = { version = "1.36.0", features = ["full"] }
