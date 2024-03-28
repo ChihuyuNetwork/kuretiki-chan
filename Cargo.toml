@@ -12,4 +12,4 @@ serenity = "0.12.1"
 string-join = "0.1.2"
 textwrap = "0.16.1"
 textwrap-macros = "0.3.0"
-tokio = { version = "1.36.0", features = ["full"] }
+tokio = { version = "1.37.0", features = ["full"] }
